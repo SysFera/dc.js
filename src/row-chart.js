@@ -11,12 +11,40 @@ dc.rowChart = function (parent, chartGroup) {
     var _rowCssClass = "row";
 
     var _chart = dc.marginable(dc.colorChart(dc.baseChart({})));
+    
+    var _xScale;
 
     var _x;
 
     var _elasticX;
 
     var _xAxis = d3.svg.axis().orient("bottom");
+
+    var _rowsCap = Infinity;
+
+    var _othersLabel = "Others";
+
+    var _othersHandler = function (data, value) {
+        data.push({"key": _othersLabel, "value": value });
+    };
+
+    var _rowData = null;
+
+    function assembleData() {
+        if (_rowsCap == Infinity) {
+            _rowData = _chart.orderedGroup().top(_rowsCap); // ordered by keys
+        } else {
+            var topRows = _chart.group().top(_rowsCap); // ordered by value
+            var topRowsSum = d3.sum(topRows, _chart.valueAccessor());
+
+            var allRows = _chart.group().all();
+            var allRowsSum = d3.sum(allRows, _chart.valueAccessor());
+
+            _othersHandler(topRows, allRowsSum - topRowsSum);
+
+            _rowData = topRows;
+        }
+    }
 
     function calculateAxisScale() {
         if (!_x || _elasticX) {
@@ -43,13 +71,21 @@ dc.rowChart = function (parent, chartGroup) {
     }
 
     _chart.doRender = function () {
+        assembleData();
+        _xScale = d3.scale.linear().domain([0, d3.max(_rowData, _chart.valueAccessor())]).range([0, _chart.effectiveWidth()]);
+ 
         _chart.resetSvg();
 
         _g = _chart.svg()
             .append("g")
             .attr("transform", "translate(" + _chart.margins().left + "," + _chart.margins().top + ")");
 
-        drawAxis();
+        _xAxis.scale(_xScale);
+
+        _g.append("g").attr("class", "axis")
+                        .attr("transform", "translate(0, " + _chart.effectiveHeight() + ")")
+                        .call(_xAxis);
+
         drawGridLines();
         drawChart();
 
@@ -87,13 +123,10 @@ dc.rowChart = function (parent, chartGroup) {
     }
 
     function drawChart() {
-        drawAxis();
-        drawGridLines();
-
         var rows = _g.selectAll("g." + _rowCssClass)
-            .data(_chart.group().all());
+                     .data(_rowData);
 
-        createElements(rows);
+        createElements(rows, _rowData);
         removeElements(rows);
         updateElements(rows);
     }
@@ -116,7 +149,9 @@ dc.rowChart = function (parent, chartGroup) {
     }
 
     function updateElements(rows) {
-        var height = rowHeight();
+        var n = _rowData.length;
+
+        var height = (_chart.effectiveHeight() - (n + 1) * _gap) / n;
 
         var rect = rows.attr("transform",function (d, i) {
                 return "translate(0," + ((i + 1) * _gap + i * height) + ")";
@@ -133,12 +168,8 @@ dc.rowChart = function (parent, chartGroup) {
 
         dc.transition(rect, _chart.transitionDuration())
             .attr("width", function (d) {
-                return Math.abs(_x(0) - _x(_chart.valueAccessor()(d)));
+				return _xScale(_chart.valueAccessor()(d));
             })
-            .attr("transform", translateX);
-
-        createTitles(rows);
-        updateLabels(rows);
     }
 
     function createTitles(rows) {
@@ -162,19 +193,22 @@ dc.rowChart = function (parent, chartGroup) {
             var lab = rows.select("text")
                 .attr("x", _labelOffsetX)
                 .attr("y", _labelOffsetY)
+                .on("click", onClick)
                 .attr("class", function (d, i) {
                     return _rowCssClass + " _" + i;
                 })
                 .text(function (d) {
-                    return _chart.label()(d);
+                            if (_chart.valueAccessor()(d) > 0) {
+                                return _chart.label()(d);
+                            } else {
+                                return "";
+                            }
                 });
-            dc.transition(lab, _chart.transitionDuration())
-            .attr("transform", translateX);
         }
     }
 
     function numberOfRows() {
-        return _chart.group().all().length;
+        return _rowData.length;
     }
 
     function rowHeight() {
@@ -228,6 +262,24 @@ dc.rowChart = function (parent, chartGroup) {
 
     _chart.isSelectedRow = function (d) {
         return _chart.hasFilter(_chart.keyAccessor()(d));
+    };
+
+    _chart.rowsCap = function (_) {
+        if (!arguments.length) return _rowsCap;
+        _rowsCap = _;
+        return _chart;
+    };
+
+    _chart.othersLabel = function (_) {
+        if (!arguments.length) return _othersLabel;
+        _othersLabel = _;
+        return _chart;
+    };
+
+    _chart.othersHandler = function (_) {
+        if (!arguments.length) return _othersHandler;
+        _othersHandler = _;
+        return _chart;
     };
 
     return _chart.anchor(parent, chartGroup);
