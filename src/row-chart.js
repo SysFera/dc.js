@@ -171,6 +171,8 @@ dc.rowChart = function (parent, chartGroup) {
             .attr("width", function (d) {
 				return _xScale(_chart.valueAccessor()(d));
             })
+
+        createTitles(rows);
     }
 
     function createTitles(rows) {
