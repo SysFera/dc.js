@@ -3659,6 +3659,8 @@ dc.rowChart = function (parent, chartGroup) {
     var _xAxis = d3.svg.axis().orient("bottom");
 
     var _rowsCap = Infinity;
+    
+    var _rowOther = true;
 
     var _othersLabel = "Others";
 
@@ -3673,10 +3675,12 @@ dc.rowChart = function (parent, chartGroup) {
             _rowData = _chart.computeOrderedGroups(); // ordered by keys
         } else {
             var topRows = _chart.group().top(_rowsCap); // ordered by value
-            var topRowsSum = d3.sum(topRows, _chart.valueAccessor());
-            var allRows = _chart.group().all();
-            var allRowsSum = d3.sum(allRows, _chart.valueAccessor());
-            _othersHandler(topRows,allRowsSum - topRowsSum);
+            if (_rowOther) {
+                var topRowsSum = d3.sum(topRows, _chart.valueAccessor());
+                var allRows = _chart.group().all();
+                var allRowsSum = d3.sum(allRows, _chart.valueAccessor());
+                _othersHandler(topRows,allRowsSum - topRowsSum);
+ 			}
             _rowData = topRows;
         }
     }
@@ -3706,22 +3710,19 @@ dc.rowChart = function (parent, chartGroup) {
     }
 
     _chart.doRender = function () {
-        assembleData();
-        _xScale = d3.scale.linear().domain([0, d3.max(_rowData, _chart.valueAccessor())]).range([0, _chart.effectiveWidth()]);
- 
+
         _chart.resetSvg();
 
+        assembleData();
+ 
         _g = _chart.svg()
             .append("g")
             .attr("transform", "translate(" + _chart.margins().left + "," + _chart.margins().top + ")");
-
-        _xAxis.scale(_xScale);
 
         _g.append("g").attr("class", "axis")
                         .attr("transform", "translate(0, " + _chart.effectiveHeight() + ")")
                         .call(_xAxis);
 
-        drawGridLines();
         drawChart();
 
         return _chart;
@@ -3758,6 +3759,12 @@ dc.rowChart = function (parent, chartGroup) {
     }
 
     function drawChart() {
+        _xScale = d3.scale.linear().domain([0, d3.max(_rowData, _chart.valueAccessor())]).range([0, _chart.effectiveWidth()]);
+        _xAxis.scale(_xScale);
+
+        drawAxis();
+        drawGridLines();
+
         var rows = _g.selectAll("g." + _rowCssClass)
                      .data(_rowData);
 
@@ -3805,6 +3812,8 @@ dc.rowChart = function (parent, chartGroup) {
             .attr("width", function (d) {
 				return _xScale(_chart.valueAccessor()(d));
             })
+
+        createTitles(rows);
     }
 
     function createTitles(rows) {
@@ -3904,6 +3913,12 @@ dc.rowChart = function (parent, chartGroup) {
         _rowsCap = _;
         return _chart;
     };
+    
+    _chart.rowOther = function (_) {
+    	if (!arguments.length) return _rowOther;
+    	_rowOther = _;
+    	return _chart;
+    }
 
     _chart.othersLabel = function (_) {
         if (!arguments.length) return _othersLabel;
